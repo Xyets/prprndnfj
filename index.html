@@ -1,850 +1,414 @@
 <!DOCTYPE html>
 <html lang="ru">
 <head>
-    <meta charset="UTF-8">
-    <title>Панель управления</title>
-
-    <!-- Favicon -->
-    <link rel="icon" type="image/png" href="{{ url_for('static', filename='icon.png') }}">
-
-    <!-- Шрифт -->
-    <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@400;600&display=swap" rel="stylesheet">
-
-    <style>
-      body {
-        font-family: 'Poppins', sans-serif;
-        background: linear-gradient(135deg, #fdfbfb, #ebedee); /* мягкий светлый фон */
-        color: #333;
-        margin: 0;
-        padding: 40px;
-        text-align: center;
-      }
-      header {
-        display: flex;
-        align-items: center;
-        justify-content: center;
-        gap: 15px;
-        margin-bottom: 40px;
-      }
-      header img {
-        height: 60px;
-      }
-      header h1 {
-        margin: 0;
-        font-size: 30px;
-        font-weight: 600;
-        color: #444;
-      }
-      h2 {
-        font-weight: 500;
-        color: #555;
-      }
-      .menu {
-        display: flex;
-        flex-wrap: wrap;
-        gap: 20px;
-        justify-content: center;
-        margin: 40px 0;
-      }
-      .menu a button {
-        background: #a3d8f4; /* нежно-голубой */
-        border: none;
-        padding: 15px 30px;
-        border-radius: 25px;
-        font-size: 18px;
-        color: #fff;
-        cursor: pointer;
-        transition: 0.3s;
-        box-shadow: 0 4px 10px rgba(0,0,0,0.1);
-      }
-      .menu a button:hover {
-        background: #74c0e3;
-      }
-      .box {
-        background: #fff;
-        border-radius: 12px;
-        padding: 20px;
-        margin: 20px auto;
-        max-width: 700px;
-        box-shadow: 0 4px 12px rgba(0,0,0,0.08);
-        color: #333;
-        font-family: monospace;
-        text-align: left;
-      }
-      h3 {
-        margin-top: 40px;
-        font-weight: 600;
-        color: #444;
-      }
-      form button {
-        margin-top: 10px;
-        background: #f7a8b8; /* нежно-розовый */
-        border: none;
-        padding: 10px 20px;
-        border-radius: 20px;
-        color: white;
-        cursor: pointer;
-        transition: 0.3s;
-      }
-      form button:hover {
-        background: #f28497;
-      }
-
-      .toast {
-        visibility: hidden;
-        min-width: 220px;
-        margin-left: -110px;
-        background-color: #74c0e3;
-        color: white;
-        text-align: center;
-        border-radius: 8px;
-        padding: 12px;
-        position: fixed;
-        z-index: 2000;
-        left: 50%;
-        bottom: 30px;
-        font-size: 14px;
-        opacity: 0;
-        transition: opacity 0.5s, bottom 0.5s;
-      }
-      .toast.show {
-        visibility: visible;
-        opacity: 1;
-        bottom: 50px;
-      }
-      .mode-toggle {
-        display: flex;
-        align-items: center;
-        justify-content: center;
-        gap: 15px;
-        margin: 20px 0;
-        font-size: 16px;
-        font-weight: 500;
-        color: #444;
-      }
-
-      .switch {
-        position: relative;
-        display: inline-block;
-        width: 70px;
-        height: 34px;
-      }
-
-      .switch input {
-        opacity: 0;
-        width: 0;
-        height: 0;
-      }
-
-      .slider {
-        position: absolute;
-        cursor: pointer;
-        top: 0; left: 0;
-        right: 0; bottom: 0;
-        background-color: #a3d8f4;
-        transition: .4s;
-        border-radius: 34px;
-      }
-
-      .slider:before {
-        position: absolute;
-        content: "";
-        height: 26px; width: 26px;
-        left: 4px; bottom: 4px;
-        background-color: white;
-        transition: .4s;
-        border-radius: 50%;
-      }
-
-      input:checked + .slider {
-        background-color: #f7a8b8;
-      }
-
-      input:checked + .slider:before {
-        transform: translateX(36px);
-      }
-
-      #entryPopup {
-        position: fixed;
-        top: 50%;
-        left: 50%;
-        transform: translate(-50%, -50%);
-        background: white;
-        padding: 30px;
-        border-radius: 20px;
-        box-shadow: 0 8px 20px rgba(0,0,0,0.2);
-        z-index: 9999;
-        text-align: center;
-        font-size: 18px;
-        color: #333;
-        max-width: 400px;
-        opacity: 0;
-        transition: opacity 0.3s ease;
-        cursor: move;
-      }
-      #entryPopup.show {
-        opacity: 1;
-      }
-      #entryPopup button {
-        margin-top: 20px;
-        background: #a3d8f4;
-        border: none;
-        padding: 10px 20px;
-        border-radius: 20px;
-        color: white;
-        font-size: 16px;
-        cursor: pointer;
-      }
-      #entryPopup button:hover {
-        background: #74c0e3;
-      }
-      
-      .log-entry {
-        padding: 8px 12px;
-        margin-bottom: 8px;
-        border-radius: 10px;
-        font-weight: 500;
-        font-family: 'Poppins', sans-serif;
-        animation: fadeIn 0.3s ease;
-      }
-
-      /* Вибрации */
-      .log-vibration {
-        background: #fff4ce; /* мягкий жёлтый */
-        color: #333;
-      }
-
-      /* Действия */
-      .log-action {
-        background: #ffdce3; /* нежно-розовый */
-        color: #333;
-      }
-
-      /* LOGIN / LOGOUT */
-      .log-loginout {
-        background: #d4f0ff; /* пастельно-голубой */
-        color: #333;
-      }
-
-      /* Донат без действия */
-      .log-donation-plain {
-        background: #d5ffdc; /* светло-зелёный */
-        color: #333;
-      }
-
-      @keyframes fadeIn {
-        from { opacity: 0; transform: translateY(5px); }
-        to { opacity: 1; transform: translateY(0); }
-      }
-
-      .log-vibration {
-        background: #fff4cc; /* мягкий жёлтый */
-        color: #333;
-      }
-
-      .log-entryevent {
-        background: #dceeff; /* мягкий голубой */
-        color: #333;
-      }
-      .vibration-timer {
-        background: #ffe6f0;
-        border-radius: 20px;
-        padding: 15px 20px;
-        margin-top: 10px;
-        font-size: 16px;
-        color: #444;
-        box-shadow: 0 0 15px rgba(255, 182, 193, 0.6);
-        animation: pop 0.3s ease;
-        width: 220px;
-      }
-
-      .vibration-timer .emoji-bounce {
-        display: inline-block;
-        animation: bounce 0.6s infinite alternate;
-        font-size: 22px;
-      }
-
-      @keyframes pop {
-        from { transform: scale(0.8); opacity: 0; }
-        to   { transform: scale(1); opacity: 1; }
-      }
-
-      @keyframes bounce {
-        from { transform: translateY(0); }
-        to   { transform: translateY(-5px); }
-      }
-
-      .progress {
-        width: 100%;
-        height: 10px;
-        background: #fdd;
-        border-radius: 10px;
-        overflow: hidden;
-        margin-top: 8px;
-      }
-      .progress-bar {
-        height: 100%;
-        background: linear-gradient(90deg, #ff99cc, #ff66aa);
-        transition: width 0.1s linear;
-      }
-      .goal-card {
-        background:#fff;
-        padding:20px;
-        border-radius:16px;
-        box-shadow:0 6px 18px rgba(0,0,0,0.1);
-        max-width:600px;
-        margin:20px auto;
-        text-align:center;
-      }
-
-      .goal-bar {
-        width:100%;
-        height:25px;
-        background:#eee;
-        border-radius:12px;
-        overflow:hidden;
-        margin:15px 0;
-      }
-
-      #goalFill {
-        height:100%;
-        width:0%;
-        background:linear-gradient(90deg,#74c0e3,#a3d8f4);
-        transition:0.4s;
-      }
-
-      .new-goal-btn {
-        background:#a3d8f4;
-        color:white;
-        padding:10px 20px;
-        border:none;
-        border-radius:12px;
-        cursor:pointer;
-      }
-      .modal {
-        display:none;
-        position:fixed;
-        top:0; left:0;
-        width:100%; height:100%;
-        background:rgba(0,0,0,0.5);
-        z-index:9998;
-      }
-
-      .modal-content {
-        background:#fff;
-        padding:20px;
-        border-radius:12px;
-        width:300px;
-        margin:150px auto;
-        box-shadow:0 6px 18px rgba(0,0,0,0.2);
-        text-align:center;
-      }
-
-
-    </style>
+  <meta charset="UTF-8">
+  <title>VIP‑лист</title>
+  <link rel="icon" href="{{ url_for('static', filename='icon.png') }}">
+  <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@400;600&display=swap" rel="stylesheet">
+  <style>
+    body {
+      font-family: 'Poppins', sans-serif;
+      background: linear-gradient(135deg, #fdfbfb, #ebedee);
+      margin: 0;
+      padding: 40px;
+      color: #333;
+    }
+    header {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 15px;
+      margin-bottom: 30px;
+    }
+    header img { height: 60px; }
+    header h1 { font-size: 28px; font-weight: 600; margin: 0; }
+    .top-bar {
+      display: flex; justify-content: space-between; flex-wrap: wrap;
+      gap: 20px; margin-bottom: 30px;
+    }
+    .search-bar input {
+      padding: 10px 15px; border-radius: 20px; border: 1px solid #ccc;
+      width: 250px; font-size: 16px;
+    }
+    .search-bar button {
+      padding: 10px 20px; border-radius: 20px; border: none;
+      background: #a3d8f4; color: white; font-size: 16px; cursor: pointer;
+    }
+    .card-grid {
+      display: grid; grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+      gap: 20px;
+    }
+    .vip-card {
+      background: white; border-radius: 16px; padding: 20px;
+      box-shadow: 0 4px 12px rgba(0,0,0,0.08); position: relative;
+    }
+    .vip-card.blocked { background: #ffe0e0; }
+    .vip-card h3 { margin: 0 0 10px; font-size: 20px; color: #444; }
+    .vip-card input[type="text"] {
+      width: 100%; padding: 6px; margin-bottom: 8px;
+      border-radius: 6px; border: 1px solid #ccc; font-family: monospace;
+    }
+    .vip-card .meta { font-size: 14px; color: #666; margin-bottom: 10px; }
+    .vip-card .actions { display: flex; justify-content: space-between; gap: 8px; }
+    .vip-card button {
+      background: #f7a8b8; border: none; padding: 6px 12px;
+      border-radius: 12px; color: white; cursor: pointer; font-size: 14px;
+    }
+    .vip-card button:hover { background: #f28497; }
+    .sort-links a {
+      margin-right: 10px; font-size: 14px; color: #888; text-decoration: none;
+    }
+    .sort-links a:hover { text-decoration: underline; }
+  </style>
 </head>
 <body>
-    <!-- Шапка -->
-    <header>
-      <img src="{{ url_for('static', filename='icon.png') }}" alt="Logo">
-      <h1>Панель управления</h1>
-    </header>
+  <header>
+    <img src="{{ url_for('static', filename='icon.png') }}" alt="Logo">
+    <h1>VIP‑лист для {{ user }}</h1>
+  </header>
 
-    <!-- Приветствие -->
-    <h2>👋 Привет, {{ user }}</h2>
-    <div class="mode-toggle">
-      <span>🌐 Публичный</span>
-      <label class="switch">
-        <input type="checkbox" id="modeSwitch" {% if current_mode == "private" %}checked{% endif %}>
-        <span class="slider"></span>
-      </label>
-      <span>🔒 Частный</span>
-    </div>
-
-    <!-- Меню -->
-    <div class="menu">
-      <a href="{{ url_for('qrcode_page') }}"><button>📱 QR‑код</button></a>
-      <a href="{{ url_for('stats') }}"><button>📊 Статистика</button></a>
-      <a href="{{ url_for('rules') }}"><button>⚙️ Правила</button></a>
-      <a href="{{ url_for('reactions_page') }}"><button>🎭 Реакции</button></a>
-      <a href="{{ url_for('vip_page') }}"><button>👑 VIP‑лист</button></a>
-      <a href="{{ url_for('logout') }}"><button>🚪 Выйти</button></a>
-    </div>
-
-    {% if mode == "public" %}
-    <div class="goal-card">
-      <h3>🎯 {{ goal.title or "Цель не установлена" }}</h3>
-
-      <div class="goal-bar">
-        <div id="goalFill"></div>
-      </div>
-
-      <div class="goal-text">
-        <span id="goalCurrent">{{ goal.current }}</span> /
-        <span id="goalTarget">{{ goal.target }}</span>
-      </div>
-
-      <button class="new-goal-btn" onclick="openGoalModal()">Начать новую цель</button>
-    </div>
-    {% endif %}
-
-    <!-- Логи -->
-    <h3>📜 Логи донатов</h3>
-    <div id="logbox" class="box" style="height:300px; overflow-y:scroll;"></div>
-    <form method="POST" action="/clear_logs">
-        <button type="submit">🧹 Очистить лог</button>
+  <div class="top-bar">
+    <form method="GET" action="/vip" class="search-bar">
+      <input type="text" name="q" placeholder="🔍 Поиск..." value="{{ query }}">
+      <button type="submit">Найти</button>
+      {% if query %}<a href="/vip">Сбросить</a>{% endif %}
     </form>
 
-    <!-- Очередь -->
-    <h3>🔁 Очередь вибраций</h3>
-    <div id="queuebox" class="box" style="height:200px; overflow-y:scroll;"></div>
-    <div style="text-align:center;">
-      <button id="clearQueueBtn"
-        style="margin-top:10px; background:#f7a8b8; border:none; padding:10px 20px; border-radius:20px; color:white; cursor:pointer;">
-        🧹 Очистить очередь
-      </button>
+    <div class="sort-links">
+      <a href="/vip?sort=total">💗 По чаевым</a>
+      <a href="/vip?sort=login_count">📅 По визитам</a>
+      <a href="/vip?sort=last_login">🕒 По дате</a>
     </div>
-    <!-- JS -->
-    /* ---------------------------------------------------------
-      🔧 1. Текущий пользователь
-    --------------------------------------------------------- */
-    const CURRENT_USER = "{{ user }}";
 
-    /* ---------------------------------------------------------
-      🌐 2. WebSocket с авто‑реконнектом
-    --------------------------------------------------------- */
-    let socket = null;
+  </div>
 
-    function connectWS() {
-        const wsUrl = `${location.protocol === "https:" ? "wss" : "ws"}://${location.host}/ws`;
+  <div class="card-grid">
+    {% for user_id, info in members %}
+    <div class="vip-card {% if info.blocked %}blocked{% endif %}" id="card_{{ user_id }}">
+      <form method="POST">
+        <input type="hidden" name="user_id" value="{{ user_id }}">
+        <input type="hidden" name="sort" value="{{ request.args.get('sort', 'total') }}">
+        <input type="hidden" name="q" value="{{ query }}">
+  
+        <h3><input type="text" name="name" value="{{ info.name }}"></h3>
+        <input type="text" name="notes" value="{{ info.notes }}" placeholder="Заметки">
+        <div class="meta">
+          💗 {{ info.total }} | 📅 {{ info.login_count }} входов<br>
+          🕒 Последний визит: <span class="date">{{ info.last_login }}</span><br>
+          🆔 ID: <code>{{ user_id }}</code>
+        </div>
+        <div class="actions">
+          <button type="submit">💾</button>
+          <button type="button" onclick="openDeleteModal('{{ user_id }}')">🗑️</button>
+        </div>
+      </form>
+    </div>
+    {% endfor %}
+  </div>
 
-        socket = new WebSocket(wsUrl);
+  <script>
+    // текущий режим сортировки берём из URL при загрузке
+    let currentSort = new URL(window.location.href).searchParams.get("sort") || "total";
 
-        socket.onopen = () => {
-            console.log("✅ Панель подключена к WebSocket");
+    // AJAX‑сохранение карточки
+    async function saveMember(form) {
+      const formData = new FormData(form);
 
-            socket.send(JSON.stringify({
-                type: "hello",
-                role: "panel",
-                user: CURRENT_USER
-            }));
+      try {
+        const res = await fetch("/vip", {
+          method: "POST",
+          body: formData
+        });
 
-            if (socket._pingInterval) clearInterval(socket._pingInterval);
-            socket._pingInterval = setInterval(() => {
-                if (socket.readyState === WebSocket.OPEN) {
-                    socket.send(JSON.stringify({ type: "ping" }));
-                }
-            }, 30000);
-        };
+        if (res.ok) {
+          console.log("✅ Сохранено");
 
-        socket.onclose = () => {
-            console.log("❌ WebSocket закрыт, переподключение...");
-            if (socket._pingInterval) clearInterval(socket._pingInterval);
-            setTimeout(connectWS, 2000);
-        };
+          // обновляем карточку заново из /vip_data
+          const userId = form.querySelector("input[name='user_id']").value;
+          await refreshVipCard(userId);
 
-        socket.onmessage = (event) => {
-            let data;
-            try { data = JSON.parse(event.data); }
-            catch { return; }
-
-            console.log("📡 Панель получила:", data);
-
-            if (data.goal_update) {
-                updateGoalUI(data.goal);
-                return;
-            }
-
-            if (data.vip_update) {
-                loadVIP();
-                return;
-            }
-
-            if (data.mode_update && data.user === CURRENT_USER) {
-                location.reload();
-                return;
-            }
-        };
+          // пересортируем список после обновления
+          resortCards(currentSort);
+        } else {
+          alert("❌ Ошибка сохранения");
+        }
+      } catch (e) {
+        console.warn("⚠️ Ошибка AJAX‑сохранения:", e);
+        alert("❌ Ошибка сохранения");
+      }
     }
 
+    function removeMember(userId) {
+      fetch("/remove_member", {
+        method: "POST",
+        headers: { "Content-Type": "application/x-www-form-urlencoded" },
+        body: "user_id=" + encodeURIComponent(userId)
+      })
+      .then(res => res.json())
+      .then(data => {
+        if (data.status === "ok") {
+          document.getElementById("card_" + userId)?.remove();
+          // после удаления пересортируем
+          resortCards(currentSort);
+        } else {
+          alert("❌ " + data.message);
+        }
+      })
+      .catch(() => alert("❌ Ошибка удаления"));
+    }
+
+
+    // форматируем дату для уже отрисованных элементов
+    document.querySelectorAll(".date").forEach(el => {
+      const raw = el.textContent.trim();
+      if (!raw) return;
+      const iso = raw.replace(" ", "T");
+      const d = new Date(iso);
+      if (!isNaN(d.getTime())) {
+        el.textContent = d.toLocaleString("ru-RU", {
+          day: "numeric",
+          month: "long",
+          hour: "2-digit",
+          minute: "2-digit"
+        });
+      }
+    });
+
+    // подключение к WebSocket
+    let socket;
+    function connectWS() {
+      socket = new WebSocket("wss://arinairina.duckdns.org/ws/");
+
+      socket.onopen = () => console.log("✅ WS открыт");
+      socket.onclose = () => {
+        console.log("❌ WS закрыт, переподключаемся...");
+        setTimeout(connectWS, 2000);
+      };
+
+      socket.onmessage = (event) => {
+        let data;
+        try { data = JSON.parse(event.data); } catch { return; }
+
+        if (data.vip_update && data.user_id) {
+          console.log("🔄 Обновляем карточку:", data.user_id);
+          refreshVipCard(data.user_id); // сортировка вызовется внутри функции
+        }
+      };
+    }
     connectWS();
 
-    /* ---------------------------------------------------------
-      🔄 Переключение режима
-    --------------------------------------------------------- */
-    const modeSwitch = document.getElementById("modeSwitch");
+    // обновление всего списка
+    async function refreshVipList() {
+      try {
+        const res = await fetch("/vip_data");
+        const data = await res.json();
+        const grid = document.querySelector(".card-grid");
+        grid.innerHTML = "";
 
-    modeSwitch.addEventListener("change", () => {
-        const newMode = modeSwitch.checked ? "private" : "public";
+        Object.entries(data.members || {}).forEach(([user_id, info]) => {
+          const card = document.createElement("div");
+          card.className = "vip-card" + (info.blocked ? " blocked" : "");
+          card.id = "card_" + user_id;
 
-        // 🔥 Отправляем команду WebSocket-серверу
-        socket.send(JSON.stringify({
-            type: "set_mode",
-            user: CURRENT_USER,
-            mode: newMode
-        }));
+          const rawDate = info.last_login || "";
+          const d = rawDate ? new Date(rawDate.replace(" ", "T")) : null;
+          const formattedDate = d && !isNaN(d.getTime())
+            ? d.toLocaleString("ru-RU", { day: "numeric", month: "long", hour: "2-digit", minute: "2-digit" })
+            : rawDate;
 
-        // 🔥 Сообщаем Flask (для сохранения в сессии)
-        fetch("/set_mode", {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ mode: newMode })
-        })
-        .then(r => r.json())
-        .then(data => {
-            if (data.status === "ok") {
-                showToast(`Режим переключен на: ${data.mode === "private" ? "🔒 Частный" : "🌐 Публичный"}`);
-            } else {
-                showToast("❌ Ошибка переключения режима");
-            }
-        })
-        .catch(() => showToast("❌ Ошибка соединения с сервером"));
-    });
+          card.innerHTML = `
+            <form id="deleteForm_${user_id}" onsubmit="event.preventDefault(); saveMember(this)">
+              <input type="hidden" name="user_id" value="${user_id}">
+              <h3><input type="text" name="name" value="${info.name}"></h3>
+              <input type="text" name="notes" value="${info.notes || ""}" placeholder="Заметки">
+              <div class="meta">
+                💗 ${info.total} | 📅 ${info.login_count} входов<br>
+                🕒 Последний визит: <span class="date" data-last-login="${rawDate}">${formattedDate}</span><br>
+                🆔 ID: <code>${user_id}</code>
+              </div>
+              <div class="actions">
+                <button type="submit">💾</button>
+                <button type="button" onclick="removeMember('${user_id}')">🗑️</button>
+              </div>
+            </form>
+          `;
+          grid.appendChild(card);
+        });
 
-    /* ---------------------------------------------------------
-      🛑 Остановка вибрации
-    --------------------------------------------------------- */
-    function sendStop() {
-        socket.send(JSON.stringify({
-            type: "stop",
-            user: CURRENT_USER
-        }));
+        // пересортируем сразу после загрузки списка
+        resortCards(currentSort);
+      } catch (e) {
+        console.warn("⚠️ Ошибка обновления VIP‑листа:", e);
+      }
     }
 
+    // обновление одной карточки
+    async function refreshVipCard(userId) {
+      try {
+        const res = await fetch("/vip_data");
+        const data = await res.json();
+        const info = data.members[userId];
+        if (!info) return;
 
-    // 📜 Логи донатов
-    async function loadLogs() {
-        try {
-            const res = await fetch("/logs_data");
-            const data = await res.json();
-            const box = document.getElementById("logbox");
-            const logs = data.logs || [];
+        const card = document.getElementById("card_" + userId);
+        const newCard = document.createElement("div");
+        newCard.className = "vip-card" + (info.blocked ? " blocked" : "");
+        newCard.id = "card_" + userId;
 
-            const newLogs = logs.slice(lastLogCount);
-            lastLogCount = logs.length;
+        const rawDate = info.last_login || "";
+        const d = rawDate ? new Date(rawDate.replace(" ", "T")) : null;
+        const formattedDate = d && !isNaN(d.getTime())
+          ? d.toLocaleString("ru-RU", { day: "numeric", month: "long", hour: "2-digit", minute: "2-digit" })
+          : rawDate;
 
-            newLogs.forEach(log => {
-                let cssClass = "log-entry";
-                if (log.includes("🏰")) cssClass += " log-vibration";
-                else if (log.includes("🎬")) cssClass += " log-action";
-                else if (log.includes("LOGIN") || log.includes("LOGOUT") || log.includes("🔵")) cssClass += " log-loginout";
-                else if (log.includes("🍀")) cssClass += " log-donation-plain";
-
-                const div = document.createElement("div");
-                div.className = cssClass;
-                div.textContent = log;
-                box.appendChild(div);
-                box.scrollTop = box.scrollHeight;
-            });
-        } catch (e) {
-            console.error("⚠️ Ошибка загрузки логов:", e);
-        }
-    }
-
-
-    // ⏱ Таймер вибрации
-    function startVibrationTimer(duration, strength = "—") {
-        const container = document.getElementById("vibrationTimersContainer");
-        const box = document.createElement("div");
-        box.className = "vibration-timer";
-        box.innerHTML = `
-          <div><span class="emoji-bounce">💖</span> Вибрация!</div>
-          <div>Сила: ${strength}</div>
-          <div>⏳ Осталось: <span class="time">${Math.ceil(duration)}</span> сек</div>
-          <div class="progress"><div class="progress-bar"></div></div>
-          <button class="stop-vibration-btn"
-                  style="margin-top:8px; background:#ff4d4d; border:none; padding:6px 12px; border-radius:12px; color:white; cursor:pointer; font-size:12px;">
-            ⛔ Остановить
-          </button>
+        newCard.innerHTML = `
+          <form onsubmit="event.preventDefault(); saveMember(this)">
+            <input type="hidden" name="user_id" value="${userId}">
+            <h3><input type="text" name="name" value="${info.name}"></h3>
+            <input type="text" name="notes" value="${info.notes || ""}" placeholder="Заметки">
+            <div class="meta">
+              💗 ${info.total} | 📅 ${info.login_count} входов<br>
+              🕒 Последний визит: <span class="date" data-last-login="${rawDate}">${formattedDate}</span><br>
+              🆔 ID: <code>${userId}</code>
+            </div>
+            <div class="actions">
+              <button type="submit">💾</button>
+              <button type="button" onclick="removeMember('${userId}')">🗑️</button>
+              <button type="button" onclick="blockMember('${userId}')">🚫</button>
+            </div>
+          </form>
         `;
-        container.appendChild(box);
 
-        let remaining = duration;
-        const timeSpan = box.querySelector(".time");
-        const progressBar = box.querySelector(".progress-bar");
-        const stopBtn = box.querySelector(".stop-vibration-btn");
-        progressBar.style.width = "100%";
-
-        const interval = setInterval(() => {
-            remaining -= 1;
-            if (remaining <= 0) {
-                clearInterval(interval);
-                box.remove();
-            } else {
-                timeSpan.textContent = Math.ceil(remaining);
-                progressBar.style.width = `${(remaining / duration) * 100}%`;
-            }
-        }, 1000);
-
-        // ⛔ Остановка вибрации — ТОЛЬКО через WebSocket
-        stopBtn.addEventListener("click", () => {
-            sendStop();
-            clearInterval(interval);
-            box.remove();
-            if (typeof showToast === "function") showToast("Вибрация остановлена");
-        });
-    }
-
-
-    function formatDate(raw) {
-        if (!raw) return "—";
-        const d = new Date(raw);
-        return d.toLocaleString("ru-RU", {
-            day: "numeric",
-            month: "long",
-            hour: "2-digit",
-            minute: "2-digit"
-        });
-    }
-
-
-    // 👑 Новые мемберы
-    async function checkNewEntries() {
-        try {
-            const res = await fetch("/entries_data");
-            const data = await res.json();
-            (data.entries || []).forEach(entry => {
-                const key = `${entry.user_id}-${entry.last_login}`;
-                if (shownEntries.has(key)) return;
-                shownEntries.add(key);
-
-                let message = entry.visits
-                  ? `👑 <strong>${entry.name}</strong><br>
-                    📅 Предыдущий визит: ${formatDate(entry._previous_login || entry.last_login)}<br>
-                    🔢 Всего визитов: ${entry.visits}<br>
-                    💗 Всего чаевых: ${entry.total_tips}<br>
-                    📝 Заметки: ${entry.notes || "нет"}`
-                  : "🆕 Новый мембер!";
-
-                showEntryPopup(message);
-            });
-        } catch (e) {
-            console.error("⚠️ Ошибка загрузки entries:", e);
+        if (card) {
+          card.replaceWith(newCard);
+        } else {
+          document.querySelector(".card-grid").appendChild(newCard);
         }
+
+        resortCards(currentSort);
+      } catch (e) {
+        console.warn("⚠️ Ошибка обновления карточки:", e);
+      }
     }
 
+    // пересортировка карточек
+    function resortCards(sortBy) {
+      const grid = document.querySelector(".card-grid");
+      const cards = Array.from(grid.children);
 
-    // 🔁 Очередь вибраций
-    async function loadQueue() {
-        try {
-            const res = await fetch("/queue_data");
-            const data = await res.json();
-            const box = document.getElementById("queuebox");
-
-            const items = data.queue || [];
-
-            if (items.length === 0) {
-                if (box.dataset.state !== "empty") {
-                    box.dataset.state = "empty";
-                    box.innerHTML = `<div style="color:#aaa; text-align:center;">Очередь пуста ✅</div>`;
-                }
-                return;
-            }
-
-            box.dataset.state = "filled";
-
-            const newHtml = items
-                .map(([strength, duration], i) =>
-                    `<div>#${i + 1} → сила: ${strength}, время: ${duration}s</div>`
-                )
-                .join("");
-
-            if (box.innerHTML !== newHtml) {
-                box.innerHTML = newHtml;
-                box.scrollTop = box.scrollHeight;
-            }
-
-        } catch (e) {
-            console.error("⚠️ Ошибка загрузки очереди:", e);
+      cards.sort((a, b) => {
+        if (sortBy === "last_login") {
+          const dateA = new Date(a.querySelector(".date")?.dataset.lastLogin?.replace(" ", "T") || 0);
+          const dateB = new Date(b.querySelector(".date")?.dataset.lastLogin?.replace(" ", "T") || 0);
+          return dateB - dateA;
         }
-    }
 
-    // 🔁 Очередь вибраций
-    async function loadQueue() {
-        try {
-            const res = await fetch("/queue_data");
-            const data = await res.json();
-            const box = document.getElementById("queuebox");
-
-            const items = data.queue || [];
-
-            if (items.length === 0) {
-                if (box.dataset.state !== "empty") {
-                    box.dataset.state = "empty";
-                    box.innerHTML = `<div style="color:#aaa; text-align:center;">Очередь пуста ✅</div>`;
-                }
-                return;
-            }
-
-            box.dataset.state = "filled";
-
-            const newHtml = items
-                .map(([strength, duration], i) =>
-                    `<div>#${i + 1} → сила: ${strength}, время: ${duration}s</div>`
-                )
-                .join("");
-
-            if (box.innerHTML !== newHtml) {
-                box.innerHTML = newHtml;
-                box.scrollTop = box.scrollHeight;
-            }
-
-        } catch (e) {
-            console.error("⚠️ Ошибка загрузки очереди:", e);
+        if (sortBy === "login_count") {
+          const textA = a.querySelector(".meta").textContent;
+          const textB = b.querySelector(".meta").textContent;
+          const numA = parseInt((textA.match(/📅\s*(\d+)\s*вход/) || [])[1]);
+          const numB = parseInt((textB.match(/📅\s*(\d+)\s*вход/) || [])[1]);
+          return (numB || 0) - (numA || 0);
         }
+
+        if (sortBy === "total") {
+          const textA = a.querySelector(".meta").textContent;
+          const textB = b.querySelector(".meta").textContent;
+          const numA = parseFloat((textA.match(/💗\s*([\d\.]+)/) || [])[1]);
+          const numB = parseFloat((textB.match(/💗\s*([\d\.]+)/) || [])[1]);
+          return (numB || 0) - (numA || 0);
+        }
+
+        return 0;
+      });
+
+      grid.innerHTML = "";
+      cards.forEach(c => grid.appendChild(c));
+      console.log("✅ Сортировка завершена (" + sortBy + ")");
     }
 
-
-    // 🧹 Очистка логов
-    document.querySelector("form[action='/clear_logs']").addEventListener("submit", (e) => {
-        e.preventDefault();
-        lastLogCount = 0;
-        document.getElementById("logbox").innerHTML = "";
-        fetch("/clear_logs", { method: "POST" })
-          .then(() => showToast("Логи очищены ✅"))
-          .catch(() => showToast("❌ Ошибка при очистке логов"));
+    // сохраняем позицию перед обновлением страницы
+    window.addEventListener("beforeunload", () => {
+      localStorage.setItem("vip_scroll", window.scrollY);
     });
 
-
-    // 🧹 Очистка очереди
-    document.getElementById("clearQueueBtn").addEventListener("click", () => {
-        fetch("/clear_queue", { method: "POST" })
-          .then(r => r.json())
-          .then(data => {
-            showToast(data.message || "Очередь очищена ✅");
-            loadQueue();
-          })
-          .catch(() => showToast("❌ Ошибка при очистке очереди"));
+    // восстанавливаем позицию после загрузки и подгружаем список
+    window.addEventListener("load", () => {
+      const y = localStorage.getItem("vip_scroll");
+      if (y) {
+        window.scrollTo(0, parseInt(y));
+      }
+      // первичная загрузка списка, чтобы сортировка работала сразу
+      refreshVipList();
     });
 
+  </script>
+  <script>
+  let deleteId = null;
 
-    // 🔔 Popup
-    function showEntryPopup(message) {
-        const popup = document.getElementById("entryPopup");
-        popup.innerHTML = `<div>${message}</div><button onclick="hideEntryPopup()">ОК</button>`;
-        popup.style.display = "block";
-        popup.classList.add("show");
-        let hideTimer = setTimeout(hidePopup, 8000);
+  function openDeleteModal(id) {
+    deleteId = id;
+    document.getElementById("modalOverlay").style.display = "block";
+    document.getElementById("confirmModal").style.display = "block";
+  }
 
-        popup.addEventListener("mouseenter", () => clearTimeout(hideTimer));
-        popup.addEventListener("mouseleave", () => hideTimer = setTimeout(hidePopup, 8000));
+  function closeDeleteModal() {
+    document.getElementById("modalOverlay").style.display = "none";
+    document.getElementById("confirmModal").style.display = "none";
+    deleteId = null;
+  }
 
-        function hidePopup() {
-            popup.classList.remove("show");
-            popup.style.display = "none";
-        }
+  document.getElementById("confirmYes").onclick = function() {
+    if (deleteId) {
+      document.getElementById("deleteForm_" + deleteId).submit();
     }
+  };
 
-    function hideEntryPopup() {
-        const popup = document.getElementById("entryPopup");
-        popup.classList.remove("show");
-        popup.style.display = "none";
-    }
+  document.addEventListener("keydown", (e) => {
+    if (e.key === "Escape") closeDeleteModal();
+  });
+  </script>
 
+  <div id="modalOverlay" style="
+    display:none;
+    position:fixed;
+    top:0; left:0;
+    width:100%; height:100%;
+    background:rgba(0,0,0,0.4);
+    z-index:1000;">
+  </div>
 
-    // 🔔 Toast
-    function showToast(message) {
-        const toast = document.getElementById("toast");
-        toast.textContent = message;
-        toast.className = "toast show";
-        setTimeout(() => {
-          toast.className = toast.className.replace("show", "");
-        }, 3000);
-    }
+  <div id="confirmModal" style="
+    display:none;
+    position:fixed;
+    top:50%; left:50%;
+    transform:translate(-50%, -50%);
+    background:white;
+    padding:20px 30px;
+    border-radius:12px;
+    box-shadow:0 6px 18px rgba(0,0,0,0.2);
+    z-index:1001;
+    text-align:center;">
+    
+    <p style="margin-bottom:20px; font-size:18px;">Удалить VIP?</p>
 
+    <button id="confirmYes" style="
+      background:#f28497;
+      color:white;
+      padding:8px 20px;
+      border:none;
+      border-radius:10px;
+      cursor:pointer;
+      margin-right:10px;">Да</button>
 
-    // ⏱ Циклы обновления
-    setInterval(loadLogs, 2000);
-    setInterval(checkNewEntries, 2000);
-    setInterval(loadQueue, 2000);
+    <button onclick="closeDeleteModal()" style="
+      background:#a3d8f4;
+      color:white;
+      padding:8px 20px;
+      border:none;
+      border-radius:10px;
+      cursor:pointer;">Нет</button>
+  </div>
 
-    loadLogs();
-    checkNewEntries();
-    loadQueue();
-
-
-    // 🖱️ Перетаскивание entryPopup
-    let isDragging = false, offsetX = 0, offsetY = 0;
-    const popup = document.getElementById("entryPopup");
-
-    popup.addEventListener("mousedown", (e) => {
-        isDragging = true;
-        offsetX = e.clientX - popup.offsetLeft;
-        offsetY = e.clientY - popup.offsetTop;
-        popup.style.transition = "none";
-    });
-
-    document.addEventListener("mousemove", (e) => {
-        if (isDragging) {
-            popup.style.left = `${e.clientX - offsetX}px`;
-            popup.style.top = `${e.clientY - offsetY}px`;
-            popup.style.transform = "none";
-        }
-    });
-
-    document.addEventListener("mouseup", () => {
-        if (isDragging) {
-            isDragging = false;
-            popup.style.transition = "opacity 0.3s ease, transform 0.3s ease";
-            popup.style.transform = "translate(-50%, -50%)";
-        }
-    });
-
-
-    <script>
-        // Загружаем цель, переданную Flask
-        let goal = JSON.parse(`{{ goal|tojson|safe or '{"title":"","target":0,"current":0}' }}`);
-
-        // Обновление UI цели
-        function updateGoalUI(newGoal = null) {
-            if (newGoal) goal = newGoal;  // обновляем локальную переменную
-
-            const percent = goal.target > 0 ? (goal.current / goal.target) * 100 : 0;
-
-            document.getElementById("goalFill").style.width = Math.min(percent, 100) + "%";
-            document.getElementById("goalCurrent").textContent = goal.current;
-            document.getElementById("goalTarget").textContent = goal.target;
-        }
-
-        updateGoalUI(); // первичная отрисовка
-    </script>
-
-    <div id="vibrationTimersContainer" style="position:fixed; top:20px; right:20px; z-index:9999;"></div>
-    <div id="toast" class="toast"></div>
-    <div id="entryPopup" style="display:none;"></div>
-
-    <!-- Модалка цели -->
-    <div id="goalModal" class="modal">
-      <div class="modal-content">
-        <h3>Новая цель</h3>
-        <form id="goalForm">
-          <input name="title" placeholder="Название цели">
-          <input name="target" placeholder="Сколько нужно" type="number">
-          <button type="submit">Сохранить</button>
-        </form>
-      </div>
-    </div>
-
-    <script>
-    function openGoalModal() {
-      document.getElementById("goalModal").style.display = "block";
-    }
-
-    document.getElementById("goalForm").onsubmit = async (e) => {
-      e.preventDefault();
-      const formData = new FormData(e.target);
-
-      await fetch("/goal_new", { method:"POST", body:formData });
-
-      // Закрываем модалку
-      document.getElementById("goalModal").style.display = "none";
-
-      // Локально обновляем UI, чтобы не ждать WebSocket
-      goal.current = 0;
-      goal.title = formData.get("title");
-      goal.target = Number(formData.get("target"));
-      updateGoalUI();
-    };
-    </script>
-  </body>
+</body>
 </html>
