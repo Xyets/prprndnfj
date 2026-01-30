@@ -352,7 +352,6 @@
 
     <!-- Приветствие -->
     <h2>👋 Привет, {{ user }}</h2>
-    
     <div class="mode-toggle">
       <span>🌐 Публичный</span>
       <label class="switch">
@@ -406,103 +405,145 @@
       </button>
     </div>
     <!-- JS -->
-    <script>
-      let shownLogs = new Set();
-      let shownEntries = new Set();
-      let lastLogCount = 0;
+    /* ---------------------------------------------------------
+      🔧 1. Текущий пользователь
+    --------------------------------------------------------- */
+    const CURRENT_USER = "{{ user }}";
 
-      // 🔄 Переключение режима
-      const modeSwitch = document.getElementById("modeSwitch");
-      modeSwitch.addEventListener("change", () => {
-        const newMode = modeSwitch.checked ? "private" : "public";
-        fetch("/set_mode", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ mode: newMode })
-        })
-        .then(r => r.json())
-        .then(data => {
-          if (data.status === "ok") {
-            showToast(`Режим переключен на: ${data.mode === "private" ? "🔒 Частный" : "🌐 Публичный"}`);
-          } else {
-            showToast("❌ Ошибка переключения режима");
-          }
-        })
-        .catch(() => showToast("❌ Ошибка соединения с сервером"));
-      });
+    /* ---------------------------------------------------------
+      🌐 2. WebSocket с авто‑реконнектом
+    --------------------------------------------------------- */
+    let socket = null;
 
-      // 📜 Логи донатов
-      async function loadLogs() {
-        try {
-          const res = await fetch("/logs_data");
-          const data = await res.json();
-          const box = document.getElementById("logbox");
-          const logs = data.logs || [];
+    function connectWS() {
+        const wsUrl = `${location.protocol === "https:" ? "wss" : "ws"}://${location.host}/ws`;
 
-          const newLogs = logs.slice(lastLogCount);
-          lastLogCount = logs.length;
-
-          newLogs.forEach(log => {
-            let cssClass = "log-entry";
-              if (log.includes("🏰")) cssClass += " log-vibration";   // жёлтый
-              else if (log.includes("🎬")) cssClass += " log-action"; // розовый
-              else if (log.includes("LOGIN") || log.includes("LOGOUT") || log.includes("🔵")) cssClass += " log-loginout"; // голубой
-              else if (log.includes("🍀")) cssClass += " log-donation-plain"; // зелёный
-
-
-
-            const div = document.createElement("div");
-            div.className = cssClass;
-            div.textContent = log;
-            box.appendChild(div);
-            box.scrollTop = box.scrollHeight;
-          });
-        } catch (e) {
-          console.error("⚠️ Ошибка загрузки логов:", e);
-        }
-      }
-
-      // 🌐 WebSocket с авто‑реконнектом
-      let socket;
-      function connectWS() {
-        const wsUrl = `${location.protocol === "https:" ? "wss" : "ws"}://${location.host}/ws/`;
         socket = new WebSocket(wsUrl);
 
         socket.onopen = () => {
-          console.log("✅ WebSocket подключён");
-          if (socket._pingInterval) clearInterval(socket._pingInterval);
-          socket._pingInterval = setInterval(() => {
-            if (socket.readyState === WebSocket.OPEN) {
-              socket.send(JSON.stringify({ type: "ping" }));
-            }
-          }, 30000);
+            console.log("✅ Панель подключена к WebSocket");
+
+            socket.send(JSON.stringify({
+                type: "hello",
+                role: "panel",
+                user: CURRENT_USER
+            }));
+
+            if (socket._pingInterval) clearInterval(socket._pingInterval);
+            socket._pingInterval = setInterval(() => {
+                if (socket.readyState === WebSocket.OPEN) {
+                    socket.send(JSON.stringify({ type: "ping" }));
+                }
+            }, 30000);
         };
 
         socket.onclose = () => {
-          console.log("❌ WebSocket закрыт, пробуем переподключиться...");
-          if (socket._pingInterval) clearInterval(socket._pingInterval);
-          setTimeout(connectWS, 2000);
+            console.log("❌ WebSocket закрыт, переподключение...");
+            if (socket._pingInterval) clearInterval(socket._pingInterval);
+            setTimeout(connectWS, 2000);
         };
 
         socket.onmessage = (event) => {
-          try {
-            const data = JSON.parse(event.data);
-            const currentUser = "{{ user }}";
-            if (data.vibration && data.vibration.target.startsWith(currentUser.toLowerCase()))
+            let data;
+            try { data = JSON.parse(event.data); }
+            catch { return; }
 
-           {
-              const { strength, duration } = data.vibration;
-              startVibrationTimer(duration, strength);
+            console.log("📡 Панель получила:", data);
+
+            if (data.goal_update) {
+                updateGoalUI(data.goal);
+                return;
             }
-          } catch {
-            console.warn("⚠️ Некорректное сообщение WebSocket");
-          }
-        };
-      }
-      connectWS();
 
-      // ⏱ Таймер вибрации
-      function startVibrationTimer(duration, strength = "—") {
+            if (data.vip_update) {
+                loadVIP();
+                return;
+            }
+
+            if (data.mode_update && data.user === CURRENT_USER) {
+                location.reload();
+                return;
+            }
+        };
+    }
+
+    connectWS();
+
+    /* ---------------------------------------------------------
+      🔄 Переключение режима
+    --------------------------------------------------------- */
+    const modeSwitch = document.getElementById("modeSwitch");
+
+    modeSwitch.addEventListener("change", () => {
+        const newMode = modeSwitch.checked ? "private" : "public";
+
+        // 🔥 Отправляем команду WebSocket-серверу
+        socket.send(JSON.stringify({
+            type: "set_mode",
+            user: CURRENT_USER,
+            mode: newMode
+        }));
+
+        // 🔥 Сообщаем Flask (для сохранения в сессии)
+        fetch("/set_mode", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ mode: newMode })
+        })
+        .then(r => r.json())
+        .then(data => {
+            if (data.status === "ok") {
+                showToast(`Режим переключен на: ${data.mode === "private" ? "🔒 Частный" : "🌐 Публичный"}`);
+            } else {
+                showToast("❌ Ошибка переключения режима");
+            }
+        })
+        .catch(() => showToast("❌ Ошибка соединения с сервером"));
+    });
+
+    /* ---------------------------------------------------------
+      🛑 Остановка вибрации
+    --------------------------------------------------------- */
+    function sendStop() {
+        socket.send(JSON.stringify({
+            type: "stop",
+            user: CURRENT_USER
+        }));
+    }
+
+
+    // 📜 Логи донатов
+    async function loadLogs() {
+        try {
+            const res = await fetch("/logs_data");
+            const data = await res.json();
+            const box = document.getElementById("logbox");
+            const logs = data.logs || [];
+
+            const newLogs = logs.slice(lastLogCount);
+            lastLogCount = logs.length;
+
+            newLogs.forEach(log => {
+                let cssClass = "log-entry";
+                if (log.includes("🏰")) cssClass += " log-vibration";
+                else if (log.includes("🎬")) cssClass += " log-action";
+                else if (log.includes("LOGIN") || log.includes("LOGOUT") || log.includes("🔵")) cssClass += " log-loginout";
+                else if (log.includes("🍀")) cssClass += " log-donation-plain";
+
+                const div = document.createElement("div");
+                div.className = cssClass;
+                div.textContent = log;
+                box.appendChild(div);
+                box.scrollTop = box.scrollHeight;
+            });
+        } catch (e) {
+            console.error("⚠️ Ошибка загрузки логов:", e);
+        }
+    }
+
+
+    // ⏱ Таймер вибрации
+    function startVibrationTimer(duration, strength = "—") {
         const container = document.getElementById("vibrationTimersContainer");
         const box = document.createElement("div");
         box.className = "vibration-timer";
@@ -525,126 +566,148 @@
         progressBar.style.width = "100%";
 
         const interval = setInterval(() => {
-          remaining -= 1;
-          if (remaining <= 0) {
-            clearInterval(interval);
-            box.remove();
-          } else {
-            timeSpan.textContent = Math.ceil(remaining);
-            progressBar.style.width = `${(remaining / duration) * 100}%`;
-          }
+            remaining -= 1;
+            if (remaining <= 0) {
+                clearInterval(interval);
+                box.remove();
+            } else {
+                timeSpan.textContent = Math.ceil(remaining);
+                progressBar.style.width = `${(remaining / duration) * 100}%`;
+            }
         }, 1000);
 
-        // ⛔ Обработчик остановки вибрации
-        stopBtn.addEventListener("click", async () => {
-          try {
-            const res = await fetch("/stop_vibration", {
-              method: "POST",
-              headers: { "Content-Type": "application/json" }
-            });
-            const data = await res.json();
-            if (data.status === "ok") {
-              clearInterval(interval);
-              box.remove();
-              if (typeof showToast === "function") {
-                showToast("Вибрация остановлена");
-              }
-            }
-          } catch (e) {
-            console.error("Ошибка остановки вибрации:", e);
-          }
+        // ⛔ Остановка вибрации — ТОЛЬКО через WebSocket
+        stopBtn.addEventListener("click", () => {
+            sendStop();
+            clearInterval(interval);
+            box.remove();
+            if (typeof showToast === "function") showToast("Вибрация остановлена");
         });
-      }
+    }
 
 
-      function formatDate(raw) {
+    function formatDate(raw) {
         if (!raw) return "—";
         const d = new Date(raw);
         return d.toLocaleString("ru-RU", {
-          day: "numeric",
-          month: "long",
-          hour: "2-digit",
-          minute: "2-digit"
+            day: "numeric",
+            month: "long",
+            hour: "2-digit",
+            minute: "2-digit"
         });
-      }
+    }
 
-      // 👑 Новые мемберы
-      async function checkNewEntries() {
+
+    // 👑 Новые мемберы
+    async function checkNewEntries() {
         try {
-          const res = await fetch("/entries_data");
-          const data = await res.json();
-          (data.entries || []).forEach(entry => {
-            const key = `${entry.user_id}-${entry.last_login}`;
-            if (shownEntries.has(key)) return;
-            shownEntries.add(key);
+            const res = await fetch("/entries_data");
+            const data = await res.json();
+            (data.entries || []).forEach(entry => {
+                const key = `${entry.user_id}-${entry.last_login}`;
+                if (shownEntries.has(key)) return;
+                shownEntries.add(key);
 
-            let message = entry.visits
-              ? `👑 <strong>${entry.name}</strong><br>
-                📅 Предыдущий визит: ${formatDate(entry._previous_login || entry.last_login)}<br>
-                🔢 Всего визитов: ${entry.visits}<br>
-                💗 Всего чаевых: ${entry.total_tips}<br>
-                📝 Заметки: ${entry.notes || "нет"}`
-              : "🆕 Новый мембер!";
+                let message = entry.visits
+                  ? `👑 <strong>${entry.name}</strong><br>
+                    📅 Предыдущий визит: ${formatDate(entry._previous_login || entry.last_login)}<br>
+                    🔢 Всего визитов: ${entry.visits}<br>
+                    💗 Всего чаевых: ${entry.total_tips}<br>
+                    📝 Заметки: ${entry.notes || "нет"}`
+                  : "🆕 Новый мембер!";
 
-            showEntryPopup(message);
-          });
+                showEntryPopup(message);
+            });
         } catch (e) {
-          console.error("⚠️ Ошибка загрузки entries:", e);
+            console.error("⚠️ Ошибка загрузки entries:", e);
         }
-      }
-
-      // 🔁 Очередь вибраций
-      async function loadQueue() {
-          try {
-              const res = await fetch("/queue_data");
-              const data = await res.json();
-              const box = document.getElementById("queuebox");
-
-              const items = data.queue || [];
-
-              // Если очередь пуста
-              if (items.length === 0) {
-                  // Если уже стоит надпись — ничего не делаем
-                  if (box.dataset.state !== "empty") {
-                      box.dataset.state = "empty";
-                      box.innerHTML = `<div style="color:#aaa; text-align:center;">Очередь пуста ✅</div>`;
-                  }
-                  return;
-              }
-
-              // Если есть элементы очереди
-              box.dataset.state = "filled";
-
-              const newHtml = items
-                  .map(([strength, duration], i) =>
-                      `<div>#${i + 1} → сила: ${strength}, время: ${duration}s</div>`
-                  )
-                  .join("");
-
-              // Обновляем только если содержимое изменилось
-              if (box.innerHTML !== newHtml) {
-                  box.innerHTML = newHtml;
-                  box.scrollTop = box.scrollHeight;
-              }
-
-          } catch (e) {
-              console.error("⚠️ Ошибка загрузки очереди:", e);
-          }
-      }
+    }
 
 
-      // 🧹 Очистка логов
-      document.querySelector("form[action='/clear_logs']").addEventListener("submit", (e) => {
+    // 🔁 Очередь вибраций
+    async function loadQueue() {
+        try {
+            const res = await fetch("/queue_data");
+            const data = await res.json();
+            const box = document.getElementById("queuebox");
+
+            const items = data.queue || [];
+
+            if (items.length === 0) {
+                if (box.dataset.state !== "empty") {
+                    box.dataset.state = "empty";
+                    box.innerHTML = `<div style="color:#aaa; text-align:center;">Очередь пуста ✅</div>`;
+                }
+                return;
+            }
+
+            box.dataset.state = "filled";
+
+            const newHtml = items
+                .map(([strength, duration], i) =>
+                    `<div>#${i + 1} → сила: ${strength}, время: ${duration}s</div>`
+                )
+                .join("");
+
+            if (box.innerHTML !== newHtml) {
+                box.innerHTML = newHtml;
+                box.scrollTop = box.scrollHeight;
+            }
+
+        } catch (e) {
+            console.error("⚠️ Ошибка загрузки очереди:", e);
+        }
+    }
+
+    // 🔁 Очередь вибраций
+    async function loadQueue() {
+        try {
+            const res = await fetch("/queue_data");
+            const data = await res.json();
+            const box = document.getElementById("queuebox");
+
+            const items = data.queue || [];
+
+            if (items.length === 0) {
+                if (box.dataset.state !== "empty") {
+                    box.dataset.state = "empty";
+                    box.innerHTML = `<div style="color:#aaa; text-align:center;">Очередь пуста ✅</div>`;
+                }
+                return;
+            }
+
+            box.dataset.state = "filled";
+
+            const newHtml = items
+                .map(([strength, duration], i) =>
+                    `<div>#${i + 1} → сила: ${strength}, время: ${duration}s</div>`
+                )
+                .join("");
+
+            if (box.innerHTML !== newHtml) {
+                box.innerHTML = newHtml;
+                box.scrollTop = box.scrollHeight;
+            }
+
+        } catch (e) {
+            console.error("⚠️ Ошибка загрузки очереди:", e);
+        }
+    }
+
+
+    // 🧹 Очистка логов
+    document.querySelector("form[action='/clear_logs']").addEventListener("submit", (e) => {
         e.preventDefault();
         lastLogCount = 0;
         document.getElementById("logbox").innerHTML = "";
         fetch("/clear_logs", { method: "POST" })
           .then(() => showToast("Логи очищены ✅"))
           .catch(() => showToast("❌ Ошибка при очистке логов"));
-      });
+    });
 
-      // 🧹 Очистка очереди
-      document.getElementById("clearQueueBtn").addEventListener("click", () => {
+
+    // 🧹 Очистка очереди
+    document.getElementById("clearQueueBtn").addEventListener("click", () => {
         fetch("/clear_queue", { method: "POST" })
           .then(r => r.json())
           .then(data => {
@@ -652,10 +715,11 @@
             loadQueue();
           })
           .catch(() => showToast("❌ Ошибка при очистке очереди"));
-      });
+    });
 
-      // 🔔 Popup
-      function showEntryPopup(message) {
+
+    // 🔔 Popup
+    function showEntryPopup(message) {
         const popup = document.getElementById("entryPopup");
         popup.innerHTML = `<div>${message}</div><button onclick="hideEntryPopup()">ОК</button>`;
         popup.style.display = "block";
@@ -669,114 +733,86 @@
             popup.classList.remove("show");
             popup.style.display = "none";
         }
+    }
 
-      }
-      function hideEntryPopup() {
+    function hideEntryPopup() {
         const popup = document.getElementById("entryPopup");
         popup.classList.remove("show");
         popup.style.display = "none";
-      }
+    }
 
-      // 🔔 Toast
-      function showToast(message) {
+
+    // 🔔 Toast
+    function showToast(message) {
         const toast = document.getElementById("toast");
         toast.textContent = message;
         toast.className = "toast show";
         setTimeout(() => {
           toast.className = toast.className.replace("show", "");
         }, 3000);
-      }
+    }
 
-      // ⏱ Циклы обновления
-      setInterval(loadLogs, 2000);
-      setInterval(checkNewEntries, 2000);
-      loadLogs();
-      checkNewEntries();
 
-      // 🖱️ Перетаскивание entryPopup
-      let isDragging = false, offsetX = 0, offsetY = 0;
-      const popup = document.getElementById("entryPopup");
+    // ⏱ Циклы обновления
+    setInterval(loadLogs, 2000);
+    setInterval(checkNewEntries, 2000);
+    setInterval(loadQueue, 2000);
 
-      popup.addEventListener("mousedown", (e) => {
+    loadLogs();
+    checkNewEntries();
+    loadQueue();
+
+
+    // 🖱️ Перетаскивание entryPopup
+    let isDragging = false, offsetX = 0, offsetY = 0;
+    const popup = document.getElementById("entryPopup");
+
+    popup.addEventListener("mousedown", (e) => {
         isDragging = true;
         offsetX = e.clientX - popup.offsetLeft;
         offsetY = e.clientY - popup.offsetTop;
-        popup.style.transition = "none"; // убираем плавность во время перетаскивания
-      });
-
-      document.addEventListener("mousemove", (e) => {
-        if (isDragging) {
-          popup.style.left = `${e.clientX - offsetX}px`;
-          popup.style.top = `${e.clientY - offsetY}px`;
-          popup.style.transform = "none"; // отключаем центрирование во время движения
-        }
-      });
-
-      document.addEventListener("mouseup", () => {
-        if (isDragging) {
-          isDragging = false;
-          // возвращаем плавность и центрирование
-          popup.style.transition = "opacity 0.3s ease, transform 0.3s ease";
-          popup.style.transform = "translate(-50%, -50%)";
-        }
-      });
-    </script>
-
-    <script>
-    document.addEventListener("DOMContentLoaded", () => {
-        const queueBox = document.getElementById("queuebox");
-        const clearBtn = document.getElementById("clearQueueBtn");
-
-        // 🔁 Загружаем очередь вибраций
-
-
-        // 🧹 Очистка очереди
-        document.getElementById("clearQueueBtn").addEventListener("click", async () => {
-            await fetch("/clear_queue", { method: "POST" });
-            loadQueue();
-        });
-
-        // Автообновление каждые 2 секунды
-        loadQueue();
-        setInterval(loadQueue, 2000);
+        popup.style.transition = "none";
     });
-    </script>
+
+    document.addEventListener("mousemove", (e) => {
+        if (isDragging) {
+            popup.style.left = `${e.clientX - offsetX}px`;
+            popup.style.top = `${e.clientY - offsetY}px`;
+            popup.style.transform = "none";
+        }
+    });
+
+    document.addEventListener("mouseup", () => {
+        if (isDragging) {
+            isDragging = false;
+            popup.style.transition = "opacity 0.3s ease, transform 0.3s ease";
+            popup.style.transform = "translate(-50%, -50%)";
+        }
+    });
+
 
     <script>
-    let goal = {{ goal|tojson|safe }};
+        // Загружаем цель, переданную Flask
+        let goal = JSON.parse(`{{ goal|tojson|safe or '{"title":"","target":0,"current":0}' }}`);
 
-    function updateGoalUI() {
-      const percent = goal.target > 0 ? (goal.current / goal.target) * 100 : 0;
-      document.getElementById("goalFill").style.width = Math.min(percent, 100) + "%";
-      document.getElementById("goalCurrent").textContent = goal.current;
-      document.getElementById("goalTarget").textContent = goal.target;
-    }
+        // Обновление UI цели
+        function updateGoalUI(newGoal = null) {
+            if (newGoal) goal = newGoal;  // обновляем локальную переменную
 
-    // WebSocket обновление
-    socket.onmessage = (event) => {
-      const data = JSON.parse(event.data);
-      if (data.goal_update) {
-        goal = data.goal;
-        updateGoalUI();
-      }
-    };
+            const percent = goal.target > 0 ? (goal.current / goal.target) * 100 : 0;
 
-    updateGoalUI();
+            document.getElementById("goalFill").style.width = Math.min(percent, 100) + "%";
+            document.getElementById("goalCurrent").textContent = goal.current;
+            document.getElementById("goalTarget").textContent = goal.target;
+        }
+
+        updateGoalUI(); // первичная отрисовка
     </script>
 
     <div id="vibrationTimersContainer" style="position:fixed; top:20px; right:20px; z-index:9999;"></div>
     <div id="toast" class="toast"></div>
     <div id="entryPopup" style="display:none;"></div>
-    <div id="goalModal" class="modal">
-      <div class="modal-content">
-        <h3>Новая цель</h3>
-        <form id="goalForm">
-          <input name="title" placeholder="Название цели">
-          <input name="target" placeholder="Сколько нужно" type="number">
-          <button type="submit">Сохранить</button>
-        </form>
-      </div>
-    </div>
+
     <!-- Модалка цели -->
     <div id="goalModal" class="modal">
       <div class="modal-content">
@@ -797,10 +833,18 @@
     document.getElementById("goalForm").onsubmit = async (e) => {
       e.preventDefault();
       const formData = new FormData(e.target);
+
       await fetch("/goal_new", { method:"POST", body:formData });
+
+      // Закрываем модалку
       document.getElementById("goalModal").style.display = "none";
+
+      // Локально обновляем UI, чтобы не ждать WebSocket
+      goal.current = 0;
+      goal.title = formData.get("title");
+      goal.target = Number(formData.get("target"));
+      updateGoalUI();
     };
     </script>
-
-</body>
+  </body>
 </html>
